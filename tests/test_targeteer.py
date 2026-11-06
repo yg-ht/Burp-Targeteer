@@ -323,6 +323,34 @@ class TargeteerTests(unittest.TestCase):
         self.send()
         self.assertEqual(1, len(self.callbacks.issues))
 
+    def test_signature_like_names_do_not_suppress_unseen_endpoint_after_reload(self):
+        unseen_url = "https://example.test/admin?role=user"
+        signature = targeteer.describe_request(RequestInfo(url=unseen_url))[0]
+        marker = targeteer.SIGNATURE_LABEL + signature
+        for name in (marker, "<p>%s</p>" % marker):
+            with self.subTest(name=name):
+                self.setUp()
+                self.send(url="https://example.test/seed", method="POST",
+                          extra=[Parameter(6, name)])
+                self.callbacks.issues[0]._severity = "False positive"
+                self.reload()
+                self.send(url=unseen_url)
+                self.assertEqual(2, len(self.callbacks.issues))
+                self.assertEqual("Low", self.callbacks.issues[1].getSeverity())
+
+    def test_signature_like_names_do_not_reopen_false_positives_after_reload(self):
+        marker = targeteer.SIGNATURE_LABEL + "a" * 64
+        for name in (marker, "<p>%s</p>" % marker):
+            with self.subTest(name=name):
+                self.setUp()
+                self.send(method="POST", extra=[Parameter(6, name)])
+                self.callbacks.issues[0]._severity = "False positive"
+                self.reload()
+                self.send(url="https://example.test/search?q=changed",
+                          method="POST", extra=[Parameter(6, name)])
+                self.assertEqual(1, len(self.callbacks.issues))
+                self.assertEqual("False positive", self.callbacks.issues[0].getSeverity())
+
     def test_other_issues_and_invalid_markers_do_not_suppress_requests(self):
         self.send()
         original = self.callbacks.issues.pop()

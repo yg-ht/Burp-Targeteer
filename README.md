@@ -57,7 +57,8 @@ For example, after triaging `/search?q=first` as **False positive**:
 Mark processed items as **False positive**, or use your normal triage workflow.
 Targeteer remembers signatures independently of severity while loaded. On
 reload, it restores signatures from existing Targeteer issue details, including
-false positives, using a versioned marker. Keep those findings in the project
+false positives, using the versioned marker in the final signature paragraph.
+Signature-like text in parameter names is ignored. Keep those findings in the project
 and save the project to retain the queue across restarts. Deleted findings are
 still remembered until the extension is reloaded; after reload, deleted findings
 can be raised again. Editing/removing the signature marker also prevents

@@ -11,7 +11,9 @@ from java.lang import Exception as JavaException
 
 
 SIGNATURE_LABEL = "Targeteer signature v1: "
-SIGNATURE_PATTERN = re.compile(r"Targeteer signature v1: ([0-9a-f]{64})(?=<|\s|$)")
+# Only trust the final paragraph we generate. Parameter names are escaped, so
+# they cannot introduce this markup even when they contain signature-like text.
+SIGNATURE_PATTERN = re.compile(r"<p>Targeteer signature v1: ([0-9a-f]{64})</p>\s*\Z")
 BODY_TYPES = (IParameter.PARAM_BODY, IParameter.PARAM_JSON,
               IParameter.PARAM_XML, IParameter.PARAM_XML_ATTR)
 
