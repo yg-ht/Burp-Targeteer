@@ -51,13 +51,17 @@ def describe_request(info):
     return signature, query_names, body_names
 
 
-class RequestEvidence(IHttpRequestResponse):
-    """Snapshot the outgoing request without accessing an unavailable response."""
+def copy_buffer(buffer):
+    return buffer[:] if buffer is not None else None
+
+
+class MessageEvidence(IHttpRequestResponse):
+    """Snapshot the completed Proxy request and its response."""
 
     def __init__(self, message):
-        self._request = message.getRequest()[:]
+        self._request = copy_buffer(message.getRequest())
+        self._response = copy_buffer(message.getResponse())
         self._service = message.getHttpService()
-        self._response = None
         self._comment = None
         self._highlight = None
 
@@ -99,7 +103,12 @@ class TargeteerIssue(IScanIssue):
         signature, query_names, body_names = description
         self._url = info.getUrl()
         self._evidence = evidence
-        self._severity = "Medium" if body_names else "Low"
+        if info.getMethod() == "OPTIONS":
+            self._severity = "Information"
+        elif body_names:
+            self._severity = "Medium"
+        else:
+            self._severity = "Low"
         details = ["<p>This in-scope Proxy request contains parameters that "
                    "may need manual testing.</p>",
                    "<p>HTTP method: <b>%s</b></p>" % escape_html(info.getMethod())]
@@ -178,7 +187,8 @@ class BurpExtender(IBurpExtender, IHttpListener):
                               % len(self._seen))
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
-        if toolFlag != self._callbacks.TOOL_PROXY or not messageIsRequest:
+        # Wait for the response so the evidence contains the full exchange.
+        if toolFlag != self._callbacks.TOOL_PROXY or messageIsRequest:
             return
         try:
             info = self._helpers.analyzeRequest(messageInfo)
@@ -193,7 +203,7 @@ class BurpExtender(IBurpExtender, IHttpListener):
             with self._lock:
                 if signature in self._seen:
                     return
-                evidence = self._callbacks.saveBuffersToTempFiles(RequestEvidence(messageInfo))
+                evidence = self._callbacks.saveBuffersToTempFiles(MessageEvidence(messageInfo))
                 self._callbacks.addScanIssue(TargeteerIssue(info, description, evidence))
                 self._seen.add(signature)
         except (Exception, JavaException):

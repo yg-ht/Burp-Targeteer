@@ -20,8 +20,9 @@ Every finding is named **Targeteer** and has **Tentative** confidence.
 
 | Recognised parameters | Severity |
 | --- | --- |
-| URL query parameters (GET parameters, on any HTTP method) | Low |
+| URL query parameters (GET parameters, on any HTTP method except OPTIONS) | Low |
 | POST body parameters, with or without query parameters | Medium |
+| URL query parameters on an OPTIONS request | Information |
 
 Body parameters include form fields (including multipart fields), JSON properties,
 XML values and XML attributes recognised by Burp's request parser. Cookies,
@@ -30,12 +31,12 @@ are excluded. Unsupported or unparseable bodies may yield no parameters.
 Names are used exactly as returned by Burp; they are case-sensitive. Nested
 JSON/XML names follow Burp's parser representation, not a custom path scheme.
 
-A finding is created just before Proxy issues the request, without waiting for
-a response. It contains a snapshot of that outgoing request. Responses and
-requests from Repeater, Scanner and other tools are ignored. Targeteer neither
-sends additional requests nor changes traffic. A request failure at the network
-level does not remove its reminder. Later extensions may still modify traffic
-after Targeteer's listener has run.
+A finding is created when Proxy receives the response. It contains a snapshot
+of the request as sent and the response. Requests from Repeater, Scanner and
+other tools are ignored. Targeteer neither sends additional requests nor changes
+traffic. A request that never receives a response (for example, a network-level
+failure or an intercepted request that is dropped) does not create a reminder;
+a later matching request that does receive a response will.
 
 ### Deduplication and triage
 
@@ -83,12 +84,14 @@ Jython integration or Burp's own issue consolidation and project persistence.
 Complete the following checks in Burp Professional before relying on the queue:
 
 1. Proxy an in-scope GET `/search?q=one`: confirm one Targeteer / Low / Tentative
-   finding and the captured request. Change `q`'s value: confirm no new finding.
+   finding with both the captured request and response. Change `q`'s value:
+   confirm no new finding.
 2. Mark it False positive. Repeat with another value: confirm it stays closed.
    Add `page=1`: confirm a new Low finding remains separate from the false positive.
 3. Proxy a POST form `name=one`: confirm Medium / Tentative. Change the value,
    reorder or repeat keys: confirm no duplicate. Add `role=user`: confirm a new
    Medium finding. Repeat using query plus body parameters and a JSON body.
+   Send an OPTIONS request with a query parameter: confirm Information.
 4. Test an out-of-scope request, a parameter-free request, a cookie-only request
    and a Repeater request: none should produce a finding.
 5. Save and reopen the project, then load Targeteer. Repeat the original keys

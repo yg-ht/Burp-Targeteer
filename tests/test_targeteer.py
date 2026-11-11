@@ -86,6 +86,7 @@ class Message:
     def __init__(self, info):
         self.info = info
         self.request = bytearray(b"GET /search?q=one HTTP/1.1\r\nHost: example.test\r\n\r\n")
+        self.response = bytearray(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
         self.service = object()
 
     def getRequest(self):
@@ -95,7 +96,7 @@ class Message:
         return self.service
 
     def getResponse(self):
-        raise AssertionError("Responses are unavailable on outgoing requests")
+        return self.response
 
 
 class Callbacks:
@@ -140,7 +141,7 @@ class Callbacks:
     def saveBuffersToTempFiles(self, message):
         if self.fail_evidence:
             raise java_lang.Exception("secret request")
-        assert message.getResponse() is None
+        assert message.getResponse() is not None
         return message
 
     def addScanIssue(self, issue):
@@ -155,7 +156,7 @@ class TargeteerTests(unittest.TestCase):
         self.extension = targeteer.BurpExtender()
         self.extension.registerExtenderCallbacks(self.callbacks)
 
-    def send(self, tool=4, is_request=True, **kwargs):
+    def send(self, tool=4, is_request=False, **kwargs):
         message = Message(RequestInfo(**kwargs))
         self.extension.processHttpMessage(tool, is_request, message)
         return message
@@ -174,10 +175,20 @@ class TargeteerTests(unittest.TestCase):
         self.assertEqual("Tentative", issue.getConfidence())
         evidence = issue.getHttpMessages()[0]
         self.assertEqual(message.request, evidence.getRequest())
+        self.assertEqual(message.response, evidence.getResponse())
         message.request[0] = 0
+        message.response[0] = 0
         self.assertNotEqual(message.request, evidence.getRequest())
+        self.assertNotEqual(message.response, evidence.getResponse())
         self.assertIs(message.service, issue.getHttpService())
-        self.assertIsNone(evidence.getResponse())
+
+    def test_options_requests_are_informational(self):
+        self.send(method="OPTIONS")
+        self.send(url="https://example.test/form", method="OPTIONS", body="name=one")
+        self.assertEqual(["Information"], [i.getSeverity() for i in self.callbacks.issues])
+        self.send()
+        self.assertEqual(["Information", "Low"],
+                         [i.getSeverity() for i in self.callbacks.issues])
 
     def test_post_and_mixed_parameters_are_medium(self):
         for url in ("https://example.test/form", "https://example.test/form?q=one"):
@@ -238,7 +249,7 @@ class TargeteerTests(unittest.TestCase):
 
     def test_only_in_scope_proxy_requests(self):
         self.send(tool=64)
-        self.send(is_request=False)
+        self.send(is_request=True)
         self.callbacks.in_scope = False
         self.send()
         self.assertEqual([], self.callbacks.issues)
